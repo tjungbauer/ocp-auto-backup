@@ -1,0 +1,8 @@
+kind: Namespace
+apiVersion: v1
+metadata:
+  name: {{ .Values.namespace }}
+  annotations:
+    openshift.io/description: {{ .Values.description }}
+    openshift.io/display-name: {{ .Values.displayname }}
+spec: {}

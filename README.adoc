@@ -1,0 +1,16 @@
+## Helm Chart: ocp-auto-backup
+
+This very basic Helm chart creates a CronJob in OpenShift, mounts a volume and performs a ETCD backup of the cluster. 
+
+### Installing
+I create the namespace via the templates, because it was initially created to be used with Gitops
+
+----
+helm install ocp-auto-backup .
+----
+
+### Template
+
+----
+helm template .
+----

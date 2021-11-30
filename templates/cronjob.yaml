@@ -1,0 +1,77 @@
+kind: CronJob
+apiVersion: batch/v1
+metadata:
+  name: {{ .Values.cronjob.name }}
+  namespace: {{ .Values.namespace }}
+  labels:
+    purpose: etcd-backup
+spec:
+  schedule: {{ .Values.cronjob.schedule | quote }}
+  startingDeadlineSeconds: 200
+  concurrencyPolicy: Forbid
+  suspend: false
+  jobTemplate:
+    metadata:
+      creationTimestamp: null
+    spec:
+      backoffLimit: 0
+      template:
+        metadata:
+          creationTimestamp: null
+        spec:
+          nodeSelector:
+            node-role.kubernetes.io/master: ''
+          restartPolicy: Never
+          activeDeadlineSeconds: 200
+          serviceAccountName: {{ .Values.serviceAccount }}
+          schedulerName: default-scheduler
+          hostNetwork: true
+          terminationGracePeriodSeconds: 30
+          securityContext: {}
+          containers:
+            - resources:
+                requests:
+                  cpu: 300m
+                  memory: 250Mi
+              terminationMessagePath: /dev/termination-log
+              name: etcd-backup
+              command:
+                - /bin/bash
+                - '-c'
+                - >-
+                  oc get no -l node-role.kubernetes.io/master --no-headers -o
+                  name | grep `hostname` | head -n 1 | xargs -I {} -- oc debug
+                  {} -- bash -c 'chroot /host sudo -E
+                  /usr/local/bin/cluster-backup.sh /home/core/backup' ; echo
+                  'Moving Local Master Backups to target directory (from
+                  /home/core/backup to mounted PVC)'; mv /home/core/backup/*
+                  /etcd-backup/; echo 'Deleting files older than 30 days' ; find
+                  /etcd-backup/ -type f  -mtime +30 -exec rm {} \;
+              securityContext:
+                privileged: true
+                runAsUser: 0
+              imagePullPolicy: IfNotPresent
+              volumeMounts:
+                - name: temp-backup
+                  mountPath: /home/core/backup
+                - name: etcd-backup
+                  mountPath: /etcd-backup
+              terminationMessagePolicy: FallbackToLogsOnError
+              image: registry.redhat.io/openshift4/ose-cli
+          serviceAccount: {{ .Values.serviceAccount }}
+          volumes:
+            - name: temp-backup
+              hostPath:
+                path: /home/core/backup
+                type: ''
+            - name: etcd-backup
+              persistentVolumeClaim:
+                claimName: {{ .Values.pvc.name }}
+          dnsPolicy: ClusterFirst
+          tolerations:
+            - operator: Exists
+              effect: NoSchedule
+            - operator: Exists
+              effect: NoExecute
+  successfulJobsHistoryLimit: 5
+  failedJobsHistoryLimit: 5
